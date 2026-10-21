@@ -1,0 +1,104 @@
+{
+  "objectIdFieldName": "OBJECTID",
+  "geometryType": "esriGeometryPoint",
+  "spatialReference": {
+    "wkid": 4326,
+    "latestWkid": 4326
+  },
+  "fields": [
+    {
+      "name": "OBJECTID",
+      "type": "esriFieldTypeOID",
+      "alias": "OBJECTID"
+    },
+    {
+      "name": "NAME",
+      "type": "esriFieldTypeString",
+      "alias": "NAME"
+    },
+    {
+      "name": "POP",
+      "type": "esriFieldTypeInteger",
+      "alias": "POP"
+    },
+    {
+      "name": "REGION",
+      "type": "esriFieldTypeString",
+      "alias": "REGION"
+    }
+  ],
+  "features": [
+    {
+      "attributes": {
+        "NAME": "Sao Paulo",
+        "POP": 12300000,
+        "REGION": "Sudeste",
+        "OBJECTID": 1
+      },
+      "geometry": {
+        "x": -46.6333,
+        "y": -23.5505
+      }
+    },
+    {
+      "attributes": {
+        "NAME": "Rio de Janeiro",
+        "POP": 6700000,
+        "REGION": "Sudeste",
+        "OBJECTID": 2
+      },
+      "geometry": {
+        "x": -43.1729,
+        "y": -22.9068
+      }
+    },
+    {
+      "attributes": {
+        "NAME": "Belo Horizonte",
+        "POP": 2500000,
+        "REGION": "Sudeste",
+        "OBJECTID": 3
+      },
+      "geometry": {
+        "x": -43.9378,
+        "y": -19.9208
+      }
+    },
+    {
+      "attributes": {
+        "NAME": "Brasilia",
+        "POP": 3050000,
+        "REGION": "Centro-Oeste",
+        "OBJECTID": 4
+      },
+      "geometry": {
+        "x": -47.8825,
+        "y": -15.7942
+      }
+    },
+    {
+      "attributes": {
+        "NAME": "Curitiba",
+        "POP": 1950000,
+        "REGION": "Sul",
+        "OBJECTID": 5
+      },
+      "geometry": {
+        "x": -49.2731,
+        "y": -25.4284
+      }
+    },
+    {
+      "attributes": {
+        "NAME": "Salvador",
+        "POP": 2900000,
+        "REGION": "Nordeste",
+        "OBJECTID": 6
+      },
+      "geometry": {
+        "x": -38.5108,
+        "y": -12.9714
+      }
+    }
+  ]
+}

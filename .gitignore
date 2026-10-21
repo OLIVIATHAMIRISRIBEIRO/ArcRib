@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caching and temporary files
+.cache/
+*.log
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Large binaries & installers from ESRI
+*.zip
+*.msi
+*.cab
+ArcGIS Pro 3.0/
+
+# IDE files
+.idea/
+.vscode/
+*.swp

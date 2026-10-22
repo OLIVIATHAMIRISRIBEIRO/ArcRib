@@ -39,7 +39,11 @@ class InteractiveMapCanvas:
 
         # Viewport bounds in geographic coordinates
         self.view_extent = Envelope(-60.0, -35.0, -35.0, 5.0)  # Default: South America / Brazil bounds
-        self.tool_mode = "PAN"  # "PAN", "IDENTIFY", "MEASURE"
+        self.tool_mode = "PAN"  # "PAN", "IDENTIFY", "MEASURE", "SELECT"
+
+        # Extent navigation history
+        self.extent_history: List[Envelope] = [self.view_extent]
+        self.extent_history_idx = 0
 
         # Interaction tracking
         self._pan_start_x = 0
@@ -55,6 +59,28 @@ class InteractiveMapCanvas:
         self.canvas.bind("<MouseWheel>", self._on_mouse_wheel)  # Windows mouse wheel
         self.canvas.bind("<Button-4>", lambda e: self._zoom(1.2, e.x, e.y))  # Linux up
         self.canvas.bind("<Button-5>", lambda e: self._zoom(0.8, e.x, e.y))  # Linux down
+
+    def push_extent(self, extent: Envelope):
+        if self.extent_history_idx < len(self.extent_history) - 1:
+            self.extent_history = self.extent_history[:self.extent_history_idx + 1]
+        self.extent_history.append(extent)
+        self.extent_history_idx = len(self.extent_history) - 1
+
+    def previous_extent(self) -> bool:
+        if self.extent_history_idx > 0:
+            self.extent_history_idx -= 1
+            self.view_extent = self.extent_history[self.extent_history_idx]
+            self.redraw()
+            return True
+        return False
+
+    def next_extent(self) -> bool:
+        if self.extent_history_idx < len(self.extent_history) - 1:
+            self.extent_history_idx += 1
+            self.view_extent = self.extent_history[self.extent_history_idx]
+            self.redraw()
+            return True
+        return False
 
     def add_layer(self, layer: FeatureLayer, renderer: Optional[Any] = None, visible: bool = True):
         self.layers.append(layer)
@@ -95,6 +121,7 @@ class InteractiveMapCanvas:
             extent.xmax + margin_x,
             extent.ymax + margin_y
         )
+        self.push_extent(self.view_extent)
         self.redraw()
 
     def geo_to_screen(self, gx: float, gy: float) -> Tuple[float, float]:
@@ -139,6 +166,7 @@ class InteractiveMapCanvas:
         new_ymin = anchor_gy - (ratio_y * new_h)
 
         self.view_extent = Envelope(new_xmin, new_ymin, new_xmin + new_w, new_ymin + new_h)
+        self.push_extent(self.view_extent)
         self.redraw()
 
     def _on_mouse_wheel(self, event):
@@ -149,10 +177,10 @@ class InteractiveMapCanvas:
         self._pan_start_x = event.x
         self._pan_start_y = event.y
 
-        if self.tool_mode == "IDENTIFY":
+        if self.tool_mode in ("IDENTIFY", "SELECT"):
             gx, gy = self.screen_to_geo(event.x, event.y)
             click_point = Point(gx, gy)
-            self._identify_feature(click_point)
+            self._identify_feature(click_point, show_popup=(self.tool_mode == "IDENTIFY"))
         elif self.tool_mode == "MEASURE":
             gx, gy = self.screen_to_geo(event.x, event.y)
             self.measure_points.append(Point(gx, gy))
@@ -190,7 +218,7 @@ class InteractiveMapCanvas:
     def _on_resize(self, event):
         self.redraw()
 
-    def _identify_feature(self, click_point: Point):
+    def _identify_feature(self, click_point: Point, show_popup: bool = True):
         """Finds closest feature under click within a 15-pixel tolerance."""
         w = max(self.canvas.winfo_width(), 1)
         tol_geo = (15.0 / w) * self.view_extent.width
@@ -220,8 +248,9 @@ class InteractiveMapCanvas:
                     # Highlight this feature
                     self.selected_features[layer.name] = {feat.fid}
                     self.redraw()
-                    if self.on_feature_selected:
+                    if show_popup and self.on_feature_selected:
                         self.on_feature_selected(layer.name, feat)
+                    return
                     return
 
     def set_basemap(self, name: str):
@@ -277,6 +306,14 @@ class InteractiveMapCanvas:
             return
 
         # 1. Background ESRI Basemap or Grid
+        is_sa_extent = (self.view_extent.xmin < -35 and self.view_extent.xmax > -75 and self.view_extent.ymin < 10 and self.view_extent.ymax > -40)
+        has_topo_layer = any("World Topographic" in l.name or "World Hillshade" in l.name for l in self.layers)
+
+        if is_sa_extent or has_topo_layer:
+            # ArcGIS Pro Topo Ocean Color
+            self.canvas.create_rectangle(0, 0, w, h, fill="#c2e5f8", outline="")
+            self._draw_south_america_cartography()
+
         if self.show_basemap:
             try:
                 self._draw_basemap_tiles()
@@ -458,3 +495,180 @@ class InteractiveMapCanvas:
         self.canvas.create_text(bar_x1, bar_y - 7, text="0", fill="#cbd5e1", font=("Segoe UI", 7))
         self.canvas.create_text(bar_mid, bar_y - 7, text=str_mid, fill="#cbd5e1", font=("Segoe UI", 7))
         self.canvas.create_text(bar_x2, bar_y - 7, text=str_tot, fill="#cbd5e1", font=("Segoe UI", 7, "bold"))
+
+        # Bottom-Right Corner Map / Navigator Button (Image 4 & Map view)
+        bx = w - 30
+        by = h - 30
+        self.canvas.create_rectangle(bx, by, bx + 22, by + 22, fill="#ffffff", outline="#cbd5e1", width=1)
+        self.canvas.create_text(bx + 11, by + 11, text="🧭", font=("Segoe UI", 10), fill="#007AC2")
+
+    def _draw_south_america_cartography(self):
+        """Renders authentic ArcGIS Pro World Topographic & Hillshade cartography for South America / Brazil."""
+        show_topo = self.layer_visibility.get("World Topographic Map", True)
+        show_hillshade = self.layer_visibility.get("World Hillshade", True)
+
+        if not show_topo and not show_hillshade:
+            return
+
+        # 1. Continent Base Landmass
+        sa_coast = [
+            (-79.5, 9.0), (-74.2, 11.2), (-67.0, 10.5), (-60.5, 8.8), (-58.1, 6.8),
+            (-55.2, 5.8), (-52.3, 4.9), (-51.2, 4.4), (-50.5, 0.0), (-48.5, -1.2),
+            (-44.3, -2.5), (-38.5, -3.7), (-35.2, -5.3), (-34.8, -7.5), (-38.5, -13.0),
+            (-39.0, -14.8), (-40.3, -20.3), (-42.0, -23.0), (-46.3, -24.0), (-48.5, -25.5),
+            (-48.5, -27.6), (-51.2, -30.0), (-53.4, -33.7), (-56.2, -34.9), (-58.3, -34.6),
+            (-57.5, -38.0), (-62.2, -38.7), (-65.0, -41.0), (-63.5, -42.5), (-67.5, -45.9),
+            (-65.9, -47.7), (-69.2, -51.6), (-67.2, -55.9), (-68.5, -54.9), (-71.0, -53.5),
+            (-73.5, -51.7), (-75.0, -47.0), (-73.8, -41.8), (-73.2, -39.8), (-73.0, -36.8),
+            (-71.6, -33.0), (-71.3, -29.9), (-70.4, -23.6), (-70.1, -20.2), (-70.3, -18.5),
+            (-72.0, -17.0), (-76.2, -13.7), (-77.0, -12.0), (-79.0, -8.1), (-81.2, -4.3),
+            (-80.0, -2.2), (-80.7, -0.9), (-79.7, 0.9), (-77.1, 3.9), (-76.8, 8.4),
+            (-79.5, 9.0)
+        ]
+        if show_topo:
+            scr_pts = []
+            for gx, gy in sa_coast:
+                sx, sy = self.geo_to_screen(gx, gy)
+                scr_pts.extend([sx, sy])
+            self.canvas.create_polygon(scr_pts, fill="#dfead7", outline="#c5d8bc", width=1)
+
+            # 2. Amazon Basin (Lush Green Lowlands)
+            amazon_basin = [
+                (-74.5, -3.5), (-71.0, 1.2), (-64.0, 2.5), (-56.0, 0.5), (-50.0, -1.0),
+                (-48.5, -3.5), (-51.0, -8.0), (-56.0, -11.5), (-64.0, -12.0), (-69.5, -10.5),
+                (-74.0, -7.0)
+            ]
+            scr_amz = []
+            for gx, gy in amazon_basin:
+                sx, sy = self.geo_to_screen(gx, gy)
+                scr_amz.extend([sx, sy])
+            self.canvas.create_polygon(scr_amz, fill="#cee7bb", outline="")
+
+            # 3. Brazilian Highlands (Planalto Central)
+            brazil_highlands = [
+                (-53.5, -12.5), (-45.0, -9.5), (-41.0, -13.5), (-41.5, -20.5),
+                (-47.0, -23.5), (-52.0, -20.0)
+            ]
+            scr_planalto = []
+            for gx, gy in brazil_highlands:
+                sx, sy = self.geo_to_screen(gx, gy)
+                scr_planalto.extend([sx, sy])
+            self.canvas.create_polygon(scr_planalto, fill="#e2dac5", outline="")
+
+        # 4. World Hillshade (Andes Mountain Relief)
+        if show_hillshade:
+            andes_spine = [
+                (-76.5, 5.0), (-78.5, -0.5), (-76.0, -8.5), (-73.5, -14.5), (-69.0, -18.5),
+                (-68.5, -24.0), (-70.0, -32.5), (-71.5, -42.0), (-73.0, -48.0), (-70.0, -53.5),
+                (-67.5, -55.0), (-69.5, -53.0), (-71.0, -46.0), (-69.0, -38.0), (-67.0, -27.0),
+                (-64.5, -18.0), (-70.0, -12.0), (-73.5, -4.5), (-75.0, 3.5)
+            ]
+            scr_andes = []
+            for gx, gy in andes_spine:
+                sx, sy = self.geo_to_screen(gx, gy)
+                scr_andes.extend([sx, sy])
+            self.canvas.create_polygon(scr_andes, fill="#b8ab98", outline="")
+
+            # Andes subtle ridges for shaded relief appearance
+            ridge_lines = [
+                [(-77.5, 1.0), (-78.0, -1.0), (-76.5, -7.0), (-74.5, -12.0), (-70.5, -17.0)],
+                [(-70.0, -18.0), (-69.0, -24.0), (-69.5, -31.0), (-71.0, -40.0), (-72.5, -48.0)],
+                [(-75.0, -5.0), (-73.0, -10.0), (-68.0, -16.0), (-67.0, -21.0)]
+            ]
+            for r_pts in ridge_lines:
+                pts = []
+                for gx, gy in r_pts:
+                    sx, sy = self.geo_to_screen(gx, gy)
+                    pts.extend([sx, sy])
+                self.canvas.create_line(pts, fill="#9f9380", width=2)
+
+        if not show_topo:
+            return
+
+        # 5. International Boundaries (Esri Topo lavender lines)
+        borders = [
+            # Colombia / Brazil
+            [(-70.0, -4.2), (-69.5, -1.5), (-70.0, 1.2), (-67.0, 1.2)],
+            # Peru / Brazil
+            [(-70.0, -4.2), (-72.0, -7.0), (-74.0, -9.0), (-71.0, -10.0), (-69.5, -11.0)],
+            # Bolivia / Brazil
+            [(-69.5, -11.0), (-65.5, -9.5), (-65.0, -12.5), (-60.5, -16.0), (-58.0, -17.5), (-58.0, -20.0)],
+            # Paraguay / Brazil
+            [(-58.0, -20.0), (-55.0, -22.5), (-54.5, -25.5)],
+            # Argentina / Brazil
+            [(-54.5, -25.5), (-53.5, -26.5), (-54.0, -27.5), (-57.5, -30.0)],
+            # Uruguay / Brazil
+            [(-57.5, -30.0), (-53.5, -31.5), (-53.4, -33.7)],
+            # Venezuela / Brazil
+            [(-67.0, 1.2), (-64.0, 4.0), (-60.5, 5.0)],
+            # Guyana / Brazil
+            [(-60.5, 5.0), (-59.5, 1.5), (-57.0, 1.5)],
+            # Suriname & French Guiana / Brazil
+            [(-57.0, 1.5), (-54.5, 2.0), (-52.0, 2.5), (-51.2, 4.4)],
+            # Neighbors
+            [(-79.0, 1.5), (-75.5, -0.2), (-70.0, -4.2)],
+            [(-69.5, -11.0), (-69.0, -16.0), (-69.5, -17.5), (-68.0, -23.0), (-70.0, -32.5), (-71.5, -42.0), (-72.5, -51.5)],
+            [(-62.5, -20.5), (-58.0, -20.0), (-58.5, -25.0), (-54.5, -25.5)]
+        ]
+        for b_line in borders:
+            scr_b = []
+            for gx, gy in b_line:
+                sx, sy = self.geo_to_screen(gx, gy)
+                scr_b.extend([sx, sy])
+            self.canvas.create_line(scr_b, fill="#9e94aa", width=1.2, dash=(5, 3))
+
+        # 6. Country Labels
+        countries = [
+            ("B R A Z I L", -52.0, -11.0, 13, "bold", "#3d3932"),
+            ("COLOMBIA", -73.5, 4.0, 8, "bold", "#6a6358"),
+            ("PERU", -75.5, -9.0, 8, "bold", "#6a6358"),
+            ("BOLIVIA", -64.5, -16.5, 8, "bold", "#6a6358"),
+            ("PARAGUAY", -58.5, -23.5, 8, "bold", "#6a6358"),
+            ("URUGUAY", -56.0, -32.8, 8, "bold", "#6a6358"),
+            ("GUYANA", -59.0, 5.0, 7, "bold", "#6a6358"),
+            ("ECUADOR", -78.8, -1.5, 7, "bold", "#6a6358")
+        ]
+        for c_text, lon, lat, sz, weight, col in countries:
+            sx, sy = self.geo_to_screen(lon, lat)
+            self.canvas.create_text(sx, sy, text=c_text, font=("Segoe UI", sz, weight), fill=col)
+
+        # 7. Geographic / Physical Labels
+        phys = [
+            ("Amazon Basin", -63.0, -3.5, 9, "italic", "#4b463e"),
+            ("Brazilian Highlands", -46.0, -15.5, 9, "italic", "#4b463e"),
+            ("Andes", -74.5, -18.0, 8, "italic", "#5e584f")
+        ]
+        for p_text, lon, lat, sz, slant, col in phys:
+            sx, sy = self.geo_to_screen(lon, lat)
+            self.canvas.create_text(sx, sy, text=p_text, font=("Segoe UI", sz, slant), fill=col)
+
+        # 8. Major Cities (Matching user screenshot)
+        cities = [
+            ("Brasília", -47.88, -15.79, True),
+            ("São Paulo", -46.63, -23.55, False),
+            ("Rio de Janeiro", -43.17, -22.91, False),
+            ("Belo Horizonte", -43.94, -19.92, False),
+            ("Salvador", -38.51, -12.97, False),
+            ("Fortaleza", -38.54, -3.72, False),
+            ("Recife", -34.88, -8.06, False),
+            ("Belém", -48.49, -1.45, False),
+            ("Manaus", -60.02, -3.12, False),
+            ("Porto Alegre", -51.22, -30.03, False),
+            ("Asunción", -57.63, -25.28, False),
+            ("Lima", -77.04, -12.04, False),
+            ("Quito", -78.47, -0.18, False),
+            ("Santiago", -70.65, -33.45, False)
+        ]
+        for c_name, lon, lat, is_cap in cities:
+            sx, sy = self.geo_to_screen(lon, lat)
+            # Dot marker
+            r = 3.5 if not is_cap else 4.5
+            self.canvas.create_oval(sx - r, sy - r, sx + r, sy + r, fill="#ffffff", outline="#1e293b", width=1.5)
+            if is_cap:
+                self.canvas.create_oval(sx - 1.5, sy - 1.5, sx + 1.5, sy + 1.5, fill="#007AC2", outline="")
+
+            # Text with subtle white halo
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                self.canvas.create_text(sx + 6 + dx, sy + dy, text=c_name, anchor="w", font=("Segoe UI", 8), fill="#ffffff")
+            self.canvas.create_text(sx + 6, sy, text=c_name, anchor="w", font=("Segoe UI", 8), fill="#1e293b")
+

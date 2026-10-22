@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "1.1.0",
+  "hooks": [
+    {
+      "event": "session-start",
+      "description": "Executed at the beginning of every AI session",
+      "enforcement": "runtime",
+      "actions": [
+        { "action": "Load session-context.md and session-state.json", "severity": "critical", "onFailure": "block" },
+        { "action": "Read engine/loading-rules.json for context budget", "severity": "high", "onFailure": "warn" },
+        { "action": "Read engine/workflow-state.json for lifecycle phase", "severity": "high", "onFailure": "warn" },
+        { "action": "Verify git status is clean or understood", "severity": "medium", "onFailure": "warn" },
+        { "action": "Load domain-relevant agents and skills via loading-rules.json", "severity": "high", "onFailure": "warn" },
+        { "action": "Present session state to user before proceeding", "severity": "critical", "onFailure": "block" }
+      ]
+    },
+    {
+      "event": "session-end",
+      "description": "Executed at the end of every AI session",
+      "enforcement": "runtime",
+      "actions": [
+        { "action": "Update session-context.md with handoff notes", "severity": "critical", "onFailure": "block" },
+        { "action": "Update session-state.json with metadata", "severity": "critical", "onFailure": "block" },
+        { "action": "Update engine/workflow-state.json with phase progress", "severity": "high", "onFailure": "warn" },
+        { "action": "Trigger continuous-learning skill for pattern extraction", "severity": "low", "onFailure": "log" },
+        { "action": "Update docs/ROADMAP.md if sprint items changed", "severity": "medium", "onFailure": "warn" },
+        { "action": "Commit tracking files together", "severity": "high", "onFailure": "warn" }
+      ]
+    },
+    {
+      "event": "pre-commit",
+      "description": "Verification before any git commit",
+      "enforcement": "runtime",
+      "actions": [
+        { "action": "Verify build passes (npm run build)", "severity": "critical", "onFailure": "block" },
+        { "action": "Verify lint passes (npm run lint)", "severity": "critical", "onFailure": "block" },
+        { "action": "Verify tests pass (npm test)", "severity": "critical", "onFailure": "block" },
+        { "action": "Check for console.log statements in production code", "severity": "medium", "onFailure": "warn" },
+        { "action": "Verify no TypeScript errors (npx tsc --noEmit)", "severity": "critical", "onFailure": "block" }
+      ]
+    },
+    {
+      "event": "secret-detection",
+      "description": "Scan for accidentally committed secrets",
+      "enforcement": "git-hook",
+      "severity": "critical",
+      "onFailure": "block",
+      "referenceScript": ".githooks/pre-commit",
+      "patterns": [
+        "sk-[a-zA-Z0-9]{20,}",
+        "AKIA[A-Z0-9]{16}",
+        "api_key\\s*=\\s*['\"][^'\"]+",
+        "password\\s*=\\s*['\"][^'\"]+",
+        "AWS_SECRET_ACCESS_KEY",
+        "PRIVATE_KEY",
+        "ghp_[a-zA-Z0-9]{36}",
+        "gho_[a-zA-Z0-9]{36}"
+      ]
+    },
+    {
+      "event": "phase-transition",
+      "description": "Triggered when workflow lifecycle phase changes",
+      "enforcement": "runtime",
+      "actions": [
+        { "action": "Validate transition guard from engine/workflow-state.json", "severity": "critical", "onFailure": "block" },
+        { "action": "Record transition in workflow-state.json history", "severity": "high", "onFailure": "warn" },
+        { "action": "Load/unload agents appropriate for new phase", "severity": "high", "onFailure": "warn" },
+        { "action": "Notify user of phase change with next suggested action", "severity": "medium", "onFailure": "warn" }
+      ]
+    },
+    {
+      "event": "sprint-checkpoint",
+      "description": "Triggered at sprint boundaries for health assessment",
+      "enforcement": "runtime",
+      "actions": [
+        { "action": "Sprint orchestrator generates health report", "severity": "high", "onFailure": "warn" },
+        { "action": "Review velocity metrics against plan", "severity": "medium", "onFailure": "warn" },
+        { "action": "Identify carry-over candidates", "severity": "medium", "onFailure": "log" },
+        { "action": "Produce sprint retrospective if ending", "severity": "high", "onFailure": "warn" }
+      ]
+    },
+    {
+      "event": "plan-complete",
+      "description": "Triggered when a planned task reaches VERIFY phase. Runs plan retrospective to measure accuracy and feed learnings back into future planning.",
+      "enforcement": "runtime",
+      "actions": [
+        { "action": "Run plan-retrospective against original plan document (compare predicted vs actual files, tasks, estimates)", "severity": "medium", "onFailure": "log" },
+        { "action": "Append retrospective findings to contexts/plan-quality-log.md", "severity": "low", "onFailure": "log" },
+        { "action": "Extract learnings for continuous-learning skill (PAAL cycle)", "severity": "low", "onFailure": "log" }
+      ]
+    },
+    {
+      "event": "task-complete",
+      "description": "Triggered after quality gates pass. Presents developer with structured decision options before commit/push.",
+      "enforcement": "runtime",
+      "actions": [
+        { "action": "Present task completion decision prompt to developer", "severity": "critical", "onFailure": "block" },
+        { "action": "Evaluate change scope for recommendations (sprint boundary, production impact, session duration)", "severity": "high", "onFailure": "warn" },
+        { "action": "Check if tracking files (ROADMAP, session-context, session-state) need updating", "severity": "medium", "onFailure": "warn" },
+        { "action": "Suggest session-end protocol if session has accumulated significant changes", "severity": "low", "onFailure": "log" }
+      ]
+    }
+  ]
+}

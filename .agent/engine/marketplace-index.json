@@ -1,0 +1,29 @@
+{
+  "entries": [
+    {
+      "name": "ag-skill-docker-compose",
+      "description": "Docker Compose orchestration skill for multi-container deployments",
+      "repository": "https://github.com/antigravity-community/ag-skill-docker-compose",
+      "version": "1.0.0",
+      "tags": ["docker", "compose", "containers", "deployment", "devops"],
+      "author": "antigravity-community"
+    },
+    {
+      "name": "ag-skill-graphql-designer",
+      "description": "GraphQL schema design and query generation skill",
+      "repository": "https://github.com/antigravity-community/ag-skill-graphql-designer",
+      "version": "0.9.0",
+      "tags": ["graphql", "api", "schema", "design", "queries"],
+      "author": "antigravity-community"
+    },
+    {
+      "name": "ag-skill-accessibility-audit",
+      "description": "WCAG compliance auditing and remediation suggestions",
+      "repository": "https://github.com/antigravity-community/ag-skill-accessibility-audit",
+      "version": "1.1.0",
+      "tags": ["accessibility", "wcag", "a11y", "audit", "compliance"],
+      "author": "antigravity-community"
+    }
+  ],
+  "lastUpdated": null
+}

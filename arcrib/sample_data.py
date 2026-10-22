@@ -255,3 +255,114 @@ def load_brasil_project() -> Dict[str, Any]:
             (cities, cities_renderer)
         ]
     }
+
+
+def load_myproject_map() -> Dict[str, Any]:
+    """
+    Generates the exact ArcGIS Pro 3.x default project shown in user screenshot:
+    - Project: MyProject
+    - Map: Map
+    - Layers:
+        1. World Topographic Map
+        2. World Hillshade
+    - Viewport: South America / Brazil continent
+    - Scale: 1:71.199.652
+    """
+    # 1. World Topographic Map Layer
+    topo_layer = FeatureLayer("World Topographic Map", geometry_type="Polygon")
+
+    # South American continent general outline
+    sa_coast = [
+        (-79.5, 9.0), (-74.2, 11.2), (-67.0, 10.5), (-60.5, 8.8), (-58.1, 6.8),
+        (-55.2, 5.8), (-52.3, 4.9), (-51.2, 4.4), (-50.5, 0.0), (-48.5, -1.2),
+        (-44.3, -2.5), (-38.5, -3.7), (-35.2, -5.3), (-34.8, -7.5), (-38.5, -13.0),
+        (-39.0, -14.8), (-40.3, -20.3), (-42.0, -23.0), (-46.3, -24.0), (-48.5, -25.5),
+        (-48.5, -27.6), (-51.2, -30.0), (-53.4, -33.7), (-56.2, -34.9), (-58.3, -34.6),
+        (-57.5, -38.0), (-62.2, -38.7), (-65.0, -41.0), (-63.5, -42.5), (-67.5, -45.9),
+        (-65.9, -47.7), (-69.2, -51.6), (-67.2, -55.9), (-68.5, -54.9), (-71.0, -53.5),
+        (-73.5, -51.7), (-75.0, -47.0), (-73.8, -41.8), (-73.2, -39.8), (-73.0, -36.8),
+        (-71.6, -33.0), (-71.3, -29.9), (-70.4, -23.6), (-70.1, -20.2), (-70.3, -18.5),
+        (-72.0, -17.0), (-76.2, -13.7), (-77.0, -12.0), (-79.0, -8.1), (-81.2, -4.3),
+        (-80.0, -2.2), (-80.7, -0.9), (-79.7, 0.9), (-77.1, 3.9), (-76.8, 8.4),
+        (-79.5, 9.0)
+    ]
+    topo_layer.add_feature(Polygon(sa_coast), {
+        "NAME": "South America Landmass",
+        "TYPE": "Continent",
+        "FILL_COLOR": "#e1ead9"
+    })
+
+    # Amazon Basin (Lush Green Lowlands)
+    amazon_basin = [
+        (-74.5, -3.5), (-71.0, 1.2), (-64.0, 2.5), (-56.0, 0.5), (-50.0, -1.0),
+        (-48.5, -3.5), (-51.0, -8.0), (-56.0, -11.5), (-64.0, -12.0), (-69.5, -10.5),
+        (-74.0, -7.0), (-74.5, -3.5)
+    ]
+    topo_layer.add_feature(Polygon(amazon_basin), {
+        "NAME": "Amazon Basin",
+        "TYPE": "Lowland",
+        "FILL_COLOR": "#cee7bb"
+    })
+
+    # Brazilian Highlands (Planalto Central)
+    brazil_highlands = [
+        (-53.5, -12.5), (-45.0, -9.5), (-41.0, -13.5), (-41.5, -20.5),
+        (-47.0, -23.5), (-52.0, -20.0), (-53.5, -12.5)
+    ]
+    topo_layer.add_feature(Polygon(brazil_highlands), {
+        "NAME": "Brazilian Highlands",
+        "TYPE": "Highland",
+        "FILL_COLOR": "#e2dac5"
+    })
+
+    topo_renderer = UniqueValueRenderer(
+        field="TYPE",
+        color_map={
+            "Continent": "#e1ead9",
+            "Lowland": "#cee7bb",
+            "Highland": "#e2dac5"
+        },
+        default_fill="#e1ead9"
+    )
+
+    # 2. World Hillshade Layer
+    hillshade_layer = FeatureLayer("World Hillshade", geometry_type="Polygon")
+
+    # Andes mountain shaded relief spine (Western South America)
+    andes_spine = [
+        (-76.5, 5.0), (-78.5, -0.5), (-76.0, -8.5), (-73.5, -14.5), (-69.0, -18.5),
+        (-68.5, -24.0), (-70.0, -32.5), (-71.5, -42.0), (-73.0, -48.0), (-70.0, -53.5),
+        (-67.5, -55.0), (-69.5, -53.0), (-71.0, -46.0), (-69.0, -38.0), (-67.0, -27.0),
+        (-64.5, -18.0), (-70.0, -12.0), (-73.5, -4.5), (-75.0, 3.5), (-76.5, 5.0)
+    ]
+    hillshade_layer.add_feature(Polygon(andes_spine), {
+        "NAME": "Andes Relief",
+        "TYPE": "MountainRelief"
+    })
+
+    # Southern Patagonian Icefield / Hills
+    patagonia_hills = [
+        (-72.0, -46.0), (-70.0, -45.5), (-68.0, -48.5), (-70.5, -51.5), (-72.0, -46.0)
+    ]
+    hillshade_layer.add_feature(Polygon(patagonia_hills), {
+        "NAME": "Patagonian Relief",
+        "TYPE": "MountainRelief"
+    })
+
+    hillshade_renderer = SimpleRenderer(
+        fill="#b8ab98",
+        stroke="#9e917d",
+        stroke_width=1.0,
+        opacity=0.55
+    )
+
+    return {
+        "project_name": "MyProject",
+        "map_name": "Map",
+        "extent": Envelope(-96.0, -58.0, -28.0, 15.0),
+        "layers": [
+            (topo_layer, topo_renderer),
+            (hillshade_layer, hillshade_renderer)
+        ]
+    }
+

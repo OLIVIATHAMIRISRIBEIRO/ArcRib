@@ -215,7 +215,7 @@ class ArcGISProStartPage(ctk.CTkFrame):
         t_row.pack(fill=tk.X, padx=16, pady=14)
 
         templates = [
-            ("🗺", "Map", lambda: self.on_open_project("Christchurch Transportation")),
+            ("🗺", "Map", lambda: self.on_open_project("MyProject")),
             ("📁", "Catalog", self.on_new_project),
             ("🌐", "Global Scene", lambda: self.on_open_project("Brasil Geografico")),
             ("🏙", "Local Scene", lambda: self.on_open_project("Christchurch Transportation")),

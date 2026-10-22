@@ -118,6 +118,17 @@ class TestArcRibApp(unittest.TestCase):
         for tab_name in expected_ribbon_tabs:
             self.app.ribbon_tabs.set(tab_name)
             self.assertEqual(self.app.ribbon_tabs.get(), tab_name)
+            tab_widget = self.app.ribbon_tabs._tab_dict[tab_name]
+            # Ensure tab has children built
+            self.assertGreater(len(tab_widget.winfo_children()), 0)
+            # Ensure all buttons inside tab are borderless
+            def _check_borderless(w):
+                if hasattr(w, "_border_width"):
+                    self.assertEqual(getattr(w, "_border_width", 0), 0)
+                for child in w.winfo_children():
+                    _check_borderless(child)
+            _check_borderless(tab_widget)
+        self.app.ribbon_tabs.set("  Map  ")
 
         # 2. Verify Right Dock Tabs (Catalog, Geoprocessing, Symbology) (Image 5)
         expected_dock_tabs = ["Catalog", "Geoprocessing", "Symbology"]
@@ -227,7 +238,135 @@ class TestArcRibApp(unittest.TestCase):
         self.app._select_construction_template("Bus Stops (Facilities)")
         self.assertEqual(self.app.selected_feature_template, "Bus Stops (Facilities)")
 
+    def test_daml_schema_integrity(self):
+        """Verify that reverse-engineered Esri ArcGIS Pro 3.0 DAML schema is populated."""
+        from arcrib.daml_schema import DAML_SCHEMA
+        self.assertIn("tabs", DAML_SCHEMA)
+        self.assertIn("groups", DAML_SCHEMA)
+        self.assertIn("controls", DAML_SCHEMA)
+        self.assertIn("accelerators", DAML_SCHEMA)
+        self.assertGreater(len(DAML_SCHEMA["accelerators"]), 20)
+        self.assertGreater(len(DAML_SCHEMA["tabs"]), 50)
+        self.assertGreater(len(DAML_SCHEMA["groups"]), 100)
+
+    def test_i18n_translation_and_switching(self):
+        """Verify i18n multilingual system (English and Portuguese pt-BR)."""
+        from arcrib.i18n import tr, set_language
+        set_language("en")
+        self.assertEqual(tr("tab_map"), "Map")
+        self.assertEqual(tr("btn_buffer"), "Buffer")
+
+        set_language("pt-BR")
+        self.assertEqual(tr("tab_map"), "Mapa")
+        self.assertIn("Influência", tr("btn_buffer"))
+        
+        # Reset back to default
+        set_language("en")
+
+    def test_myproject_map_layout_fidelity(self):
+        """Verify the exact ArcGIS Pro 3.x Map layout from user screenshot."""
+        try:
+            self.app.load_project_by_name("MyProject")
+            self.assertEqual(self.app.current_project_name, "MyProject")
+            self.assertEqual(self.app.lbl_proj_dropdown.cget("text"), "MyProject ▾")
+
+            layer_names = [l.name for l in self.app.canvas.layers]
+            self.assertIn("World Topographic Map", layer_names)
+            self.assertIn("World Hillshade", layer_names)
+
+            self.assertEqual(self.app.ribbon_tabs.get(), "  Map  ")
+            self.assertEqual(self.app.center_tabs.get(), "  🗺 Map ✕  ")
+            self.assertEqual(self.app.scale_combo.get(), "1:71.199.652")
+            self.assertIn("72,0538018°W", self.app.lbl_coords.cget("text"))
+            self.assertEqual(self.app.lbl_selection.cget("text"), "Selected Features: 0")
+            self.assertEqual(self.app.lbl_toc_root.cget("text"), "☑  🗺 Map")
+            self.assertEqual(self.app.right_tabs.get(), "Catalog")
+
+            # Verify Map tab controls matching user screenshot
+            self.assertTrue(hasattr(self.app, "btn_explore"))
+            self.assertTrue(hasattr(self.app, "btn_basemap"))
+            self.assertTrue(hasattr(self.app, "btn_select"))
+            self.assertTrue(hasattr(self.app, "btn_measure"))
+        finally:
+            # Switch back to Christchurch for clean state
+            self.app.load_project_by_name("Christchurch Transportation")
+
+    def test_map_notes_layer_creation(self):
+        """Verify Map Notes templates create real FeatureLayers with pins."""
+        initial_layer_count = len(self.app.canvas.layers)
+        self.app._action_add_map_notes("Bright Map Notes", "#ef4444", "#ffffff")
+        self.assertEqual(len(self.app.canvas.layers), initial_layer_count + 1)
+        added_layer = self.app.canvas.layers[-1]
+        self.assertEqual(added_layer.name, "Bright Map Notes")
+        self.assertEqual(len(added_layer), 3)
+        self.assertEqual(added_layer.geometry_type, "Point")
+
+    def test_toc_view_modes(self):
+        """Verify 6 Contents TOC view filter modes."""
+        modes = ["DRAWING_ORDER", "SOURCE", "SELECTION", "EDITING", "SNAPPING", "LABELING"]
+        for m in modes:
+            self.app._set_toc_view_mode(m)
+            self.assertEqual(self.app.toc_view_mode, m)
+
+        # Reset to DRAWING_ORDER
+        self.app._set_toc_view_mode("DRAWING_ORDER")
+
+    def test_catalog_view_modes(self):
+        """Verify Catalog dock view modes (Project, Portal, Favorites)."""
+        self.app._set_catalog_view("PORTAL")
+        self.assertEqual(self.app.catalog_view_mode, "PORTAL")
+
+        self.app._set_catalog_view("FAVORITES")
+        self.assertEqual(self.app.catalog_view_mode, "FAVORITES")
+
+        self.app._set_catalog_view("PROJECT")
+        self.assertEqual(self.app.catalog_view_mode, "PROJECT")
+
+    def test_extent_history_and_undo_redo(self):
+        """Verify canvas extent history tracking with Previous / Next extents."""
+        canvas = self.app.canvas
+        initial_idx = canvas.extent_history_idx
+        canvas.zoom_to_extent(Envelope(172.6, -43.6, 172.7, -43.5))
+        self.assertGreater(canvas.extent_history_idx, initial_idx)
+
+        # Previous extent
+        self.assertTrue(canvas.previous_extent())
+
+        # Next extent
+        self.assertTrue(canvas.next_extent())
+
+        # Test QA toolbar undo/redo wrappers
+        self.app._action_qa_undo()
+        self.app._action_qa_redo()
+
+    def test_snapping_and_coords_cycling(self):
+        """Verify snapping toggle and coordinates format cycling."""
+        initial_snap = getattr(self.app, "snapping_enabled", True)
+        self.app._toggle_snapping()
+        self.assertNotEqual(self.app.snapping_enabled, initial_snap)
+        self.app._toggle_snapping()
+        self.assertEqual(self.app.snapping_enabled, initial_snap)
+
+        # Coords format cycling (DD -> DMS -> METERS)
+        self.app._cycle_coords_format()
+        self.assertEqual(self.app.coords_format_mode, "DMS")
+        self.app._cycle_coords_format()
+        self.assertEqual(self.app.coords_format_mode, "METERS")
+        self.app._cycle_coords_format()
+        self.assertEqual(self.app.coords_format_mode, "DD")
+
+    def test_language_toggle(self):
+        """Verify bilingual language toggle (pt-BR / en)."""
+        from arcrib import i18n
+        curr_lang = i18n.ACTIVE_LANGUAGE
+        self.app._toggle_language()
+        self.assertNotEqual(i18n.ACTIVE_LANGUAGE, curr_lang)
+        self.app._toggle_language()
+        self.assertEqual(i18n.ACTIVE_LANGUAGE, curr_lang)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
 

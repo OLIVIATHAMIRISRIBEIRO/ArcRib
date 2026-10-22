@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.dll
 
 # Caching and temporary files
 .cache/
@@ -19,8 +20,12 @@ ENV/
 *.msi
 *.cab
 ArcGIS Pro 3.0/
+ESRI ArcGIS Pro*/
+extracted_daml/
+extracted_daml_pt_BR/
 
 # IDE files
 .idea/
 .vscode/
 *.swp
+
